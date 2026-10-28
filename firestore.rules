@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function admin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function approved() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/accessRequests/$(request.auth.uid))
+        && get(/databases/$(database)/documents/accessRequests/$(request.auth.uid)).data.status == 'approved';
+    }
+    match /admins/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+    match /accessRequests/{userId} {
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['email', 'displayName', 'status', 'createdAt'])
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
+      allow get: if signedIn() && (request.auth.uid == userId || admin());
+      allow list, update, delete: if admin();
+    }
+    match /trips/{tripId} {
+      allow read: if admin() || approved();
+      allow write: if admin();
+      match /{document=**} {
+        allow read: if admin() || approved();
+        allow write: if admin();
+      }
+    }
+
+  function taipeiGoogleUser() { return request.auth != null && request.auth.token.email_verified == true && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+  function taipeiMember(trip) { return get(/databases/$(database)/documents/taipeiTrips/$(trip)/members/$(request.auth.uid)).data; }
+  function taipeiAllowed(trip) { return taipeiGoogleUser() && taipeiMember(trip).enabled == true && taipeiMember(trip).role in ['admin', 'viewer']; }
+  function taipeiAdmin(trip) { return taipeiAllowed(trip) && taipeiMember(trip).role == 'admin'; }
+  function taipeiValidItem(trip) {
+   let d = request.resource.data;
+   let t = get(/databases/$(database)/documents/taipeiTrips/$(trip)).data;
+   return d.keys().hasAll(['title','date','time','note','place','kind','done']) && d.keys().hasOnly(['title','date','time','note','place','kind','done'])
+    && d.title is string && d.title.size() > 0 && d.title.size() <= 120
+    && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && d.date >= t.start && d.date <= t.end
+    && d.time is string && d.time.size() <= 40 && d.note is string && d.note.size() <= 2000
+    && d.place is string && d.place.size() <= 200 && d.kind in ['event','booking','check'] && d.done is bool;
+  }
+  match /taipeiTrips/{trip} {
+   allow get: if taipeiAllowed(trip);
+   allow list, create, update, delete: if false;
+   match /members/{uid} { allow get: if taipeiGoogleUser() && request.auth.uid == uid; allow list, write: if false; }
+   match /items/{item} { allow read: if taipeiAllowed(trip); allow create, update: if taipeiAdmin(trip) && taipeiValidItem(trip); allow delete: if taipeiAdmin(trip); }
+  }
+  match /{document=**} { allow read, write: if false; }
+
+  }
+}
