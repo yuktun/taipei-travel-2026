@@ -10,4 +10,6 @@ The app uses the isolated taipeiTrips namespace and the named Firebase client ap
 
 No build is required. Serve the cloned public files with any local static server, or publish main/root through GitHub Pages. Open the fictional demo without signing in. Offline support covers the public shell and demo only.
 
-Validation before release: 3 core tests, 12 authorization scenarios, 7 shared-project regression scenarios, and responsive/offline/mocked-auth browser checks passed locally. Real-account access verification is separate.
+Validation before release: 4 core tests and 14 additional authentication/UI regression scenarios, 12 authorization scenarios, 7 shared-project regression scenarios, and responsive/offline/mocked-auth browser checks passed locally. Real-account access verification is separate.
+
+Google authentication and trip authorization are separate. A missing or denied membership keeps Logout and the signed-in identity visible and offers a retry. Only server-authorized admins can edit. The optional five-day Taipei inspiration is available without private bookings; all ideas are unbooked suggestions.
