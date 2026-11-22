@@ -190,7 +190,7 @@ try {
   if (!response.ok) throw Error('missing configuration');
   const config = await response.json();
   if (!config.firebase?.projectId || !config.tripId || JSON.stringify(config).includes('CONFIRM_')) throw Error('incomplete configuration');
-  client = await (await import('./firebase-client.js')).connect(config, rememberLogin);
+  client = await (await import('./firebase-client.js?v=5')).connect(config, rememberLogin);
   updateAccount();
   client.watchAuth(next => {
     if (demo && !wantsPrivateAfterLogin) { user = next; updateAccount(); return; }
