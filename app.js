@@ -2,12 +2,17 @@ import {escapeHTML as e, mapURL, roleFor, validateItem, datesBetween, demoTrip, 
 const $ = selector => document.querySelector(selector);
 let client, user = null, role = null, trip = null, items = [], tab = 'days', day;
 let demo = false, stops = [], generation = 0, editingId = null, accountBusy = false;
-let wantsPrivateAfterLogin = false;
+let wantsPrivateAfterLogin = false, reconnectPrivate = false;
+const rememberLoginKey = "taipei-remember-login";
+let rememberLogin = false;
+try { rememberLogin = localStorage.getItem(rememberLoginKey) === "1"; } catch {}
 
 function status(message) { $('#status').textContent = message; }
 function updateAccount() {
   $('#account').textContent = user ? '登出' : 'Google 登入';
-  $('#account').disabled = accountBusy;
+  $('#account').disabled = !client || accountBusy;
+  $('#rememberLogin').disabled = !client || accountBusy;
+  $('#rememberLogin').checked = rememberLogin;
   $('#sessionBadge').hidden = !user;
   $('#sessionBadge').textContent = user ? `已登入：${user.displayName || user.email || 'Google 帳戶'}` : '';
   $('#exitPreview').textContent = user ? '返回私人旅程' : '返回登入';
@@ -33,7 +38,7 @@ function gate(title, message, retry = false) {
   updateAccount();
 }
 function signedOut() {
-  clearTrip(); user = null;
+  clearTrip(); user = null; reconnectPrivate = false;
   gate('我哋嘅私人旅程', '以獲授權的 Google 帳戶登入，查看行程及預訂。');
   status('請登入以查看私人旅程。');
 }
@@ -68,7 +73,7 @@ function render() {
   updateAccount();
 }
 async function openPrivate(next) {
-  clearTrip(); user = next;
+  clearTrip(); user = next; reconnectPrivate = false;
   const run = generation;
   gate('正在檢查台北權限', 'Google 已登入，正在載入旅程授權。'); status('正在檢查權限…');
   if (!navigator.onLine) return accessFailure({code: 'unavailable'});
@@ -105,6 +110,18 @@ $('#preview').onclick = () => {
 };
 $('#exitPreview').onclick = () => user ? openPrivate(user) : signedOut();
 $('#retryAccess').onclick = () => { if (user && client) openPrivate(user); };
+$('#rememberLogin').onchange = async event => {
+  if (!client || accountBusy) return updateAccount();
+  const keep = event.target.checked;
+  accountBusy = true; updateAccount();
+  try {
+    await client.setRememberLogin(keep);
+    rememberLogin = keep;
+    try { if (keep) localStorage.setItem(rememberLoginKey, '1'); else localStorage.removeItem(rememberLoginKey); } catch {}
+    status(keep ? '已設定在此裝置保持登入。共用裝置請勿開啟。' : '已關閉保持登入；關閉分頁後需重新登入。');
+  } catch { status('未能更改登入保留設定；原有設定不變。'); }
+  finally { accountBusy = false; updateAccount(); }
+};
 $('#account').onclick = async () => {
   if (accountBusy) return;
   if (!client) return status('登入服務仍在準備，請稍後再試。');
@@ -161,16 +178,20 @@ $('#theme').onclick = () => {
 };
 try { document.body.classList.toggle('dark', localStorage.getItem('taipei-theme') === 'dark'); } catch {}
 addEventListener('offline', () => {
-  if (!demo) { clearTrip(); gate('已離線', '私人資料已清除；登入狀態仍然保留。連線恢復後可重新檢查。', true); status('已離線 · 可以查看行程靈感'); }
+  if (!demo) { reconnectPrivate = Boolean(user); clearTrip(); gate('已離線', '私人資料已清除；登入狀態仍然保留。', true); status('已離線 · 可以查看行程靈感'); }
 });
-addEventListener('online', () => { $('#retryAccess').disabled = false; if (user && !trip) status('連線已恢復，可以重新檢查權限。'); });
+addEventListener('online', () => {
+  $('#retryAccess').disabled = false;
+  if (reconnectPrivate && client && user && !demo && !accountBusy) openPrivate(user);
+});
 try {
   let response = await fetch('./config.local.json', {cache: 'no-store'});
   if (!response.ok) response = await fetch('./config.public.json', {cache: 'no-store'});
   if (!response.ok) throw Error('missing configuration');
   const config = await response.json();
   if (!config.firebase?.projectId || !config.tripId || JSON.stringify(config).includes('CONFIRM_')) throw Error('incomplete configuration');
-  client = await (await import('./firebase-client.js')).connect(config);
+  client = await (await import('./firebase-client.js')).connect(config, rememberLogin);
+  updateAccount();
   client.watchAuth(next => {
     if (demo && !wantsPrivateAfterLogin) { user = next; updateAccount(); return; }
     wantsPrivateAfterLogin = false;
