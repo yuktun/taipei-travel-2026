@@ -1,4 +1,4 @@
-import {escapeHTML as e, mapURL, roleFor, validateItem, datesBetween, demoTrip, demoItems} from './core.js';
+import {escapeHTML as e, mapURL, roleFor, validateItem, datesBetween, demoTrip, demoItems, initialTripDay} from './core.js?v=6';
 const $ = selector => document.querySelector(selector);
 let client, user = null, role = null, trip = null, items = [], tab = 'days', day;
 let demo = false, stops = [], generation = 0, editingId = null, accountBusy = false;
@@ -33,6 +33,7 @@ function clearTrip() {
   $('#daysPicker').replaceChildren();
 }
 function gate(title, message, retry = false) {
+  $('#cover').hidden = Boolean(user);
   $('#gateTitle').textContent = title; $('#gateMessage').textContent = message;
   $('#retryAccess').hidden = !retry || !user; $('#retryAccess').disabled = !navigator.onLine;
   updateAccount();
@@ -58,6 +59,7 @@ function accessFailure(error) {
 }
 function render() {
   if (!trip) return;
+  $('#cover').hidden = !demo;
   $('#gate').hidden = true; $('#workspace').hidden = false;
   $('#tripTitle').textContent = trip.title;
   $('#tripDates').textContent = demo ? '五日路線靈感 · 全部可選 · 未預訂' : `${trip.start} — ${trip.end}`;
@@ -73,7 +75,7 @@ function render() {
   updateAccount();
 }
 async function openPrivate(next) {
-  clearTrip(); user = next; reconnectPrivate = false;
+  clearTrip(); user = next; reconnectPrivate = false; tab = 'days';
   const run = generation;
   gate('正在檢查台北權限', 'Google 已登入，正在載入旅程授權。'); status('正在檢查權限…');
   if (!navigator.onLine) return accessFailure({code: 'unavailable'});
@@ -96,9 +98,11 @@ async function openPrivate(next) {
     keep(client.watchTrip(data => {
       if (!active()) return;
       if (!data) return fail({code: 'trip-not-ready'});
+      const firstView = !trip;
       trip = data;
-      if (!day || day < data.start || day > data.end) day = data.start;
+      if (!day || day < data.start || day > data.end) day = initialTripDay(data.start, data.end);
       status('已連接 · 私人資料只保留於目前畫面'); render();
+      if (firstView) window.scrollTo(0, 0);
     }, fail));
     if (!active()) return;
     keep(client.watchItems(data => { if (active()) { items = data; render(); } }, fail));

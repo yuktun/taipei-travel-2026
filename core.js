@@ -21,3 +21,11 @@ const inspiration=[
 ];
 export const demoItems=inspiration.map(([offset,time,title,note,place],i)=>({id:`idea-${i+1}`,kind:'event',title,date:`2030-01-0${offset+1}`,time,note,place,done:false}));
 demoItems.push({id:'sample-check',kind:'check',title:'準備旅行用品',date:demoTrip.start,time:'',note:'行程靈感清單：證件、充電器、雨具；請按自己需要調整。',place:'',done:false});
+
+// Trip dates are Taipei calendar dates, independent of the device's time zone.
+export function initialTripDay(start,end,now=new Date()){
+  const parts=new Intl.DateTimeFormat('en',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const date=Object.fromEntries(parts.map(({type,value})=>[type,value]));
+  const today=`${date.year}-${date.month}-${date.day}`;
+  return today < start ? start : today > end ? end : today;
+}
