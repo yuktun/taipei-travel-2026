@@ -2,3 +2,6 @@
 .session-line{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:18px 4px;min-height:60px}#status{padding:0}#sessionBadge{font-size:12px;color:var(--ink);overflow-wrap:anywhere}.gate-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}.section-head .actions{align-items:center;justify-content:flex-end;flex-wrap:wrap}#exitPreview{font-size:12px;padding:7px 10px}#editorStatus{font-size:13px;color:var(--ink)}@media(max-width:600px){.section-head{gap:12px;align-items:flex-start}.section-head .actions{max-width:130px}.section-head .eyebrow{line-height:1.7}}
 
 .remember-login{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);cursor:pointer;min-height:32px}.remember-login input{width:16px;height:16px;margin:0;flex:none}
+
+/* Suppress double-tap zoom without blocking panning or pinch zoom. */
+html,body,.days,dialog{touch-action:manipulation}
