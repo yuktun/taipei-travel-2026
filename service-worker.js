@@ -1,4 +1,12 @@
-const CACHE='taipei-shell-v7';const SHELL=['./','./index.html','./styles.css?v=7','./app.js?v=6','./core.js?v=6','./firebase-client.js?v=5','./icon-night-180.png','./icon-night-192.png','./icon-night-512.png','./manifest.webmanifest'];
-self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('taipei-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin||!SHELL.some(path=>new URL(path,self.registration.scope).pathname===url.pathname))return;event.respondWith(fetch(event.request).catch(()=>caches.match(event.request)));});
+const CACHE='taipei-shell-v8';
+const SHELL=['./index.html','./styles.css?v=8','./app.js?v=8','./core.js?v=6','./offline.js?v=8','./firebase-client.js?v=8','./icon-night-180.png','./icon-night-192.png','./icon-night-512.png','./manifest.webmanifest'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL.map(p=>new Request(new URL(p,self.registration.scope),{cache:'reload'})))).then(()=>self.skipWaiting())));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('taipei-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',e=>{
+  const request=e.request, url=new URL(request.url), scope=new URL(self.registration.scope);
+  if(request.method!=='GET'||url.origin!==scope.origin)return;
+  const nav=request.mode==='navigate'&&[scope.pathname,new URL('index.html',scope).pathname].includes(url.pathname);
+  if(!nav&&!SHELL.some(p=>new URL(p,scope).href===url.href))return;
+  const cached=()=>caches.match(nav?new URL('index.html',scope):request,{cacheName:CACHE});
+  e.respondWith(fetch(request).then(r=>r.ok?r:cached().then(c=>c||r)).catch(()=>cached().then(c=>c||Response.error())));
+});

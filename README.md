@@ -2,13 +2,13 @@
 
 A private Traditional Chinese travel app with a public GitHub Pages shell. Google sign-in and enabled per-trip membership are required for private itinerary and booking data.
 
-Daily itinerary, bookings, checklist, Google Maps, themes and an offline public demo are included. Private content stays in memory and is cleared on logout, revoked access or offline events.
+Daily itinerary, bookings, checklist, Google Maps, themes and an offline public demo are included. Online private content stays in memory. Authorized users can explicitly save a passphrase-encrypted, read-only device copy.
 
 This repository contains no private bookings, account identifiers or travel dates. config.public.json is public Firebase web configuration, not an admin credential. Never commit service-account keys, private seeds or membership identities.
 
 The app uses the isolated taipeiTrips namespace and the named Firebase client app taipei-travel. firestore.rules preserves the legacy Korea policy and adds Taipei membership rules. Recheck current live rules before any deployment; do not replace the shared policy with a standalone ruleset. Membership writes require an authorized privileged operator.
 
-No build is required. Serve the cloned public files with any local static server, or publish main/root through GitHub Pages. Open the fictional demo without signing in. Offline support covers the public shell and demo only.
+No build is required. Serve the cloned public files with any local static server, or publish main/root through GitHub Pages. Open the fictional demo without signing in. Only public shell assets are cached by the service worker. Private offline copies are fetched from the server after fresh membership verification and stored only as AES-GCM ciphertext protected by a locally derived key. Unlock while offline; no queued edits. The copy expires after 14 days, and explicit logout or observed access revocation removes it. Remote revocation cannot invalidate an already downloaded copy while offline.
 
 Validation before release: 4 core tests and 14 additional authentication/UI regression scenarios, 12 authorization scenarios, 7 shared-project regression scenarios, and responsive/offline/mocked-auth browser checks passed locally. Real-account access verification is separate.
 

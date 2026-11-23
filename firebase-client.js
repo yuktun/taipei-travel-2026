@@ -12,5 +12,12 @@ export async function connect(config, rememberLogin = false){
   watchMembership:(uid,cb,err)=>f.onSnapshot(f.doc(root,'members',uid),s=>cb(s.data()),err),
   watchTrip:(cb,err)=>f.onSnapshot(root,s=>cb(s.data()),err),
   watchItems:(cb,err)=>f.onSnapshot(f.collection(root,'items'),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))),err),
+  readOfflineCopy:async uid=>{
+   if (auth.currentUser?.uid!==uid || !auth.currentUser.emailVerified) throw Object.assign(Error('membership'),{code:'permission-denied'});
+   const member=(await f.getDocFromServer(f.doc(root,'members',uid))).data();
+   if (member?.enabled!==true || !['admin','viewer'].includes(member.role)) throw Object.assign(Error('membership'),{code:'permission-denied'});
+   const [trip,items]=await Promise.all([f.getDocFromServer(root),f.getDocsFromServer(f.collection(root,'items'))]);
+   return {trip:trip.data(),items:items.docs.map(d=>({id:d.id,...d.data()}))};
+  },
   add:item=>f.addDoc(f.collection(root,'items'),item),update:(id,item)=>f.updateDoc(f.doc(root,'items',id),item),remove:id=>f.deleteDoc(f.doc(root,'items',id))};
 }

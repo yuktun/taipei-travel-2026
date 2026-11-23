@@ -5,3 +5,4 @@
 
 /* Suppress double-tap zoom without blocking panning or pinch zoom. */
 html,body,.days,dialog{touch-action:manipulation}
+.offline-actions{margin:10px 0}.offline-actions button{font-size:13px}#offlineHelp,#offlineError{font-size:14px;line-height:1.6}#offlineDialog input{font-size:16px}
