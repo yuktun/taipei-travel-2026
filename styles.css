@@ -6,3 +6,11 @@
 /* Suppress double-tap zoom without blocking panning or pinch zoom. */
 html,body,.days,dialog{touch-action:manipulation}
 .offline-actions{margin:10px 0}.offline-actions button{font-size:13px}#offlineHelp,#offlineError{font-size:14px;line-height:1.6}#offlineDialog input{font-size:16px}
+.story-action{margin-top:8px}.story-action button{min-height:44px;font-size:.875rem;padding:8px 12px;border-color:var(--accent)}
+#placeStory{width:min(calc(100% - 24px),540px);max-height:calc(100% - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;padding:clamp(16px,4vw,26px)}
+.story-heading{position:sticky;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:var(--card);padding:0 0 10px}
+.story-heading button{min-height:44px;min-width:44px;white-space:nowrap;padding:8px 12px}
+#placeStoryTitle{margin:4px 0 0;font-size:clamp(1.25rem,5vw,1.5rem)}
+#placeStory h3{margin:12px 0 4px;font-size:1rem}#placeStory p{line-height:1.7;margin:0 0 10px}#placeStory .eyebrow{margin:0}
+.story-sources:not([hidden]){display:flex;flex-wrap:wrap;gap:8px 14px;font-size:.875rem}.story-sources a{color:inherit}
+

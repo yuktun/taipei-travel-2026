@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-Hant">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#17483e"><meta name="referrer" content="no-referrer"><title>台北慢遊</title><link rel="manifest" href="manifest.webmanifest"><link rel="icon" type="image/png" sizes="192x192" href="icon-night-192.png"><link rel="apple-touch-icon" sizes="180x180" href="icon-night-180.png"><link rel="stylesheet" href="styles.css?v=8"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#17483e"><meta name="referrer" content="no-referrer"><title>台北慢遊</title><link rel="manifest" href="manifest.webmanifest"><link rel="icon" type="image/png" sizes="192x192" href="icon-night-192.png"><link rel="apple-touch-icon" sizes="180x180" href="icon-night-180.png"><link rel="stylesheet" href="styles.css?v=9"></head>
 <body>
 <header><a class="brand" href="./">旅途 <span>TAIPEI</span></a><div class="actions"><button id="theme" aria-label="切換日夜主題">◐</button><button id="account">Google 登入</button></div></header>
 <main>
@@ -16,5 +16,12 @@
 <footer>留白一點，旅程自在一點。<span>台北慢遊 / PRIVATE TRAVEL COMPANION</span></footer>
 <dialog id="editor"><form id="editForm"><h2>加入行程</h2><label>名稱<input name="title" required maxlength="120"></label><label>日期<input name="date" type="date" required></label><label>時間<input name="time" maxlength="40" placeholder="例如 10:00"></label><label>備註<textarea name="note" maxlength="2000"></textarea></label><label>地圖搜尋地點<input name="place" maxlength="200"></label><p id="editorStatus" role="alert"></p><div class="actions"><button type="button" id="cancel">取消</button><button type="submit">儲存</button></div></form></dialog>
 <dialog id="offlineDialog"><form id="offlineForm"><h2 id="offlineTitle"></h2><p id="offlineHelp"></p><label>離線密碼<input id="offlinePass" type="password" minlength="10" maxlength="128" required autocomplete="off" spellcheck="false"></label><label id="offlineConfirmWrap">再輸入一次<input id="offlineConfirm" type="password" minlength="10" maxlength="128" autocomplete="off" spellcheck="false"></label><p id="offlineError" role="alert"></p><div class="actions"><button type="button" id="offlineCancel">取消</button><button type="submit" id="offlineSubmit"></button></div></form></dialog>
-<script type="module" src="app.js?v=8"></script>
+<dialog id="placeStory" aria-labelledby="placeStoryTitle">
+  <form method="dialog" class="story-heading"><div><p class="eyebrow">景點故事 · 故宮北院</p><h2 id="placeStoryTitle" tabindex="-1">喺台北故宮，讀一段香港史</h2></div><button type="submit" aria-label="關閉推薦理由及背後故事">關閉</button></form>
+  <section><h3>點解推薦？</h3><p>翠玉白菜同肉形石睇嘅係工藝，而一樓 N103 嘅《梯航星集》可以由另一個角度睇故宮：用一份同香港有直接關係嘅文件，睇清朝點樣由朝貢往來，逐步轉向以條約、使節同外交機構處理國際關係。睇完三樓 N302，有時間落到一樓參觀一個展廳就夠，唔使行完整館。</p></section>
+  <section><h3>條約背後嘅故事</h3><p>1842 年，第一次鴉片戰爭以清廷同英國簽訂《南京條約》告終。條約第三款割讓嘅係<strong>香港島</strong>，唔係今日成個香港。1860 年《北京條約》涉及界限街以南嘅九龍，1898 年《展拓香港界址專條》再以 99 年期租借新界。三份文件、三個年份，先拼出熟悉嘅香港版圖。</p><p>展覽將條約放喺清代地圖、官書同其他外交文書旁邊。如果當日見到《南京條約》，值得留意呢份文件點樣用幾行文字寫下一個地方嘅轉折，而唔只係記一個年份。</p></section>
+  <section><h3>點樣睇最順路？</h3><p>北部院區第一展覽館 <strong>1 樓 N103</strong>，展期由 2026 年 11 月 21 日至 2027 年 2 月 21 日。館方將《南京條約》列為展品，個別文物當日有冇展出可以到埗問館員。時間唔夠就保留三樓重點，唔使趕。</p></section>
+  <p class="story-sources" id="storySources"><a href="https://www.npm.gov.tw/News-Content.aspx?idstr=MDMwMDAwOTY%3D&amp;l=1&amp;sno=04014707" target="_blank" rel="noopener noreferrer">故宮展品公告 ↗</a><a href="https://www.nationalarchives.gov.uk/image/15145c50-9990-417c-a98e-4371c2d2aa7b/" target="_blank" rel="noopener noreferrer">條約第三款 ↗</a><a href="https://www.legco.gov.hk/research-publications/chinese/essentials-1617ise07-land-tenure-system-in-hong-kong.htm" target="_blank" rel="noopener noreferrer">香港立法會歷史資料 ↗</a></p>
+</dialog>
+<script type="module" src="app.js?v=9"></script>
 </body></html>

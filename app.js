@@ -5,6 +5,32 @@ let client, user = null, role = null, trip = null, items = [], tab = 'days', day
 let demo = false, stops = [], generation = 0, editingId = null, accountBusy = false;
 let wantsPrivateAfterLogin = false, reconnectPrivate = false;
 let offlineView=false, mode=null, attempt=0, initializing=null;
+let storyItemId = null;
+function hasPlaceStory(item) {
+  if (item?.kind !== 'event') return false;
+  const location = item.title + ' ' + item.place;
+  return !/南院|南部院區/.test(location) && /故宮|梯航星集|南京條約/.test(location);
+}
+function closeStory() {
+  storyItemId = null;
+  if ($('#placeStory').open) $('#placeStory').close();
+}
+function openStory(button) {
+  if (tab !== 'days' || !trip || $('#placeStory').open) return;
+  const item = items.find(row => row.id === button.dataset.story && row.date === day);
+  if (!hasPlaceStory(item)) return;
+  storyItemId = item.id;
+  $('#storySources').hidden = !navigator.onLine;
+  $('#placeStory').scrollTop = 0;
+  $('#placeStory').showModal();
+  $('#placeStoryTitle').focus({preventScroll:true});
+}
+$('#placeStory').addEventListener('close', () => {
+  if ($('#placeStory').open) return;
+  const id = storyItemId;
+  storyItemId = null;
+  if (id !== null) [...document.querySelectorAll('[data-story]')].find(button => button.dataset.story === id)?.focus({preventScroll:true});
+});
 const rememberLoginKey = "taipei-remember-login";
 let rememberLogin = false;
 try { rememberLogin = localStorage.getItem(rememberLoginKey) === "1"; } catch {}
@@ -28,7 +54,7 @@ function closeEditor() {
 }
 // Authorization failures must not erase a valid Google authentication session.
 function clearTrip() {
-  closeOffline(); offlineView=false;
+  closeStory(); closeOffline(); offlineView=false;
   generation++; stops.forEach(stop => stop()); stops = [];
   role = null; trip = null; items = []; day = undefined; demo = false; closeEditor();
   $('#workspace').hidden = true; $('#gate').hidden = false; $('#add').hidden = true;
@@ -74,8 +100,9 @@ function render() {
   $('#daysPicker').hidden = tab !== 'days';
   $('#daysPicker').innerHTML = datesBetween(trip.start, trip.end).map((date, i) => `<button data-day="${e(date)}" class="${date === day ? 'active' : ''}" aria-pressed="${date === day}">DAY ${i + 1}${demo ? '' : `<br>${e(date.slice(5).replace('-', ' / '))}`}</button>`).join('');
   const kind = tab === 'days' ? 'event' : tab === 'bookings' ? 'booking' : 'check';
+  if (storyItemId !== null && (tab !== 'days' || !items.some(item => item.id === storyItemId && item.date === day && hasPlaceStory(item)))) closeStory();
   const list = items.filter(item => item.kind === kind && (tab !== 'days' || item.date === day)).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-  $('#content').innerHTML = list.length ? list.map(item => `<article class="event"><time>${e(tab === 'days' ? item.time : demo ? '' : item.date.slice(5))}</time><div><h3>${item.done ? '✓ ' : ''}${e(item.title)}</h3><p>${e(item.note)}</p>${item.place ? offlineView ? `<span class="fine">${e(item.place)}</span>` : `<a href="${e(mapURL(item.place))}" target="_blank" rel="noopener noreferrer">↗ ${e(item.place)}</a>` : ''}${role === 'admin' && !demo ? `<div class="actions">${item.kind === 'check' ? `<button data-toggle="${e(item.id)}">${item.done ? '標為未完成' : '完成'}</button>` : ''}<button data-edit="${e(item.id)}">編輯</button><button data-delete="${e(item.id)}">刪除</button></div>` : ''}</div></article>`).join('') : `<div class="empty">${demo && tab === 'bookings' ? '行程靈感唔代表已預訂。<br><small>私人預訂只會於授權登入後顯示。</small>' : '呢一頁仲有空間。<br><small>等下一個好點子。</small>'}</div>`;
+  $('#content').innerHTML = list.length ? list.map(item => `<article class="event"><time>${e(tab === 'days' ? item.time : demo ? '' : item.date.slice(5))}</time><div><h3>${item.done ? '✓ ' : ''}${e(item.title)}</h3><p>${e(item.note)}</p>${item.place ? offlineView ? `<span class="fine">${e(item.place)}</span>` : `<a href="${e(mapURL(item.place))}" target="_blank" rel="noopener noreferrer">↗ ${e(item.place)}</a>` : ''}${hasPlaceStory(item) ? `<div class="story-action"><button type="button" data-story="${e(item.id)}" aria-haspopup="dialog">推薦理由・背後故事</button></div>` : ''}${role === 'admin' && !demo ? `<div class="actions">${item.kind === 'check' ? `<button data-toggle="${e(item.id)}">${item.done ? '標為未完成' : '完成'}</button>` : ''}<button data-edit="${e(item.id)}">編輯</button><button data-delete="${e(item.id)}">刪除</button></div>` : ''}</div></article>`).join('') : `<div class="empty">${demo && tab === 'bookings' ? '行程靈感唔代表已預訂。<br><small>私人預訂只會於授權登入後顯示。</small>' : '呢一頁仲有空間。<br><small>等下一個好點子。</small>'}</div>`;
   document.querySelectorAll('[data-tab]').forEach(button => button.setAttribute('aria-selected', button.dataset.tab === tab));
   updateAccount();
 }
@@ -145,6 +172,7 @@ $('#account').onclick = async () => {
 };
 document.addEventListener('click', async event => {
   const button = event.target.closest('button'); if (!button) return;
+  if (button.dataset.story) return openStory(button);
   if (button.dataset.tab) { tab = button.dataset.tab; render(); }
   if (button.dataset.day) { day = button.dataset.day; render(); }
   if (role !== 'admin' || demo) return;
@@ -242,8 +270,8 @@ $('#offlineForm').onsubmit=async e=>{
   try {
     if (step==='save' && navigator.onLine && uid && role && trip && !demo && !offlineView) {
       if (pass!==again) { $('#offlineError').textContent='兩次密碼唔相同，請再輸入。'; return; }
-      const urls=['./index.html','./styles.css?v=8','./app.js?v=8','./core.js?v=6','./offline.js?v=8'];
-      const ready=await Promise.all(urls.map(url=>caches.match(url,{cacheName:'taipei-shell-v8'})));
+      const urls=['./index.html','./styles.css?v=9','./app.js?v=9','./core.js?v=6','./offline.js?v=8'];
+      const ready=await Promise.all(urls.map(url=>caches.match(url,{cacheName:'taipei-shell-v9'})));
       if (!ready.every(Boolean)||!navigator.serviceWorker.controller) throw Object.assign(Error('shell'),{code:'shell'});
       const data=await client.readOfflineCopy(uid);
       if (!current() || !navigator.onLine || user?.uid!==uid) return;
@@ -265,12 +293,12 @@ $('#offlineForm').onsubmit=async e=>{
     $('#offlineError').textContent=step==='unlock'?'未能解鎖。請檢查離線密碼。':err?.code==='shell'?'離線 App 尚未下載完成，請連網重新整理再試。':'未能儲存離線版。請檢查連線或裝置空間。';
   } finally { if (current()) $('#offlineSubmit').disabled=false; }
 };
-addEventListener('pagehide',()=>{if (offlineView) offlineGate(); else closeOffline();});
+addEventListener('pagehide',()=>{closeStory(); if (offlineView) offlineGate(); else closeOffline();});
 addEventListener('offline',()=>{
-  if (!demo) { reconnectPrivate=Boolean(user); offlineGate(); } else updateOffline();
+  if (!demo) { reconnectPrivate=Boolean(user); offlineGate(); } else { $('#storySources').hidden=true; updateOffline(); }
 });
 addEventListener('online',()=>{
-  if (offlineView) clearTrip(); else closeOffline();
+  if (offlineView) clearTrip(); else { $('#storySources').hidden=false; closeOffline(); }
   updateOffline();
   $('#retryAccess').disabled=false;
   if (reconnectPrivate && client && user && !demo && !accountBusy) openPrivate(user);

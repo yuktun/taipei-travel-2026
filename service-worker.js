@@ -1,5 +1,5 @@
-const CACHE='taipei-shell-v8';
-const SHELL=['./index.html','./styles.css?v=8','./app.js?v=8','./core.js?v=6','./offline.js?v=8','./firebase-client.js?v=8','./icon-night-180.png','./icon-night-192.png','./icon-night-512.png','./manifest.webmanifest'];
+const CACHE='taipei-shell-v9';
+const SHELL=['./index.html','./styles.css?v=9','./app.js?v=9','./core.js?v=6','./offline.js?v=8','./firebase-client.js?v=8','./icon-night-180.png','./icon-night-192.png','./icon-night-512.png','./manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL.map(p=>new Request(new URL(p,self.registration.scope),{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('taipei-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
