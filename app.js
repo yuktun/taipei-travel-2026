@@ -1,16 +1,16 @@
 import {escapeHTML as e, mapURL, roleFor, validateItem, datesBetween, demoTrip, demoItems, initialTripDay} from './core.js?v=6';
-import {storageKey,encrypt,decrypt} from './offline.js?v=8';
+import {storageKey} from './offline.js?v=8';
+import {hasDeviceCopy, saveDeviceCopy, readDeviceCopy, deleteDeviceCopy} from './device-offline.js?v=10';
+import {storiesFor} from './place-stories.js?v=10';
+import {installDoubleTapGuard} from './touch-guard.js?v=10';
 const $ = selector => document.querySelector(selector);
 let client, user = null, role = null, trip = null, items = [], tab = 'days', day;
 let demo = false, stops = [], generation = 0, editingId = null, accountBusy = false;
 let wantsPrivateAfterLogin = false, reconnectPrivate = false;
-let offlineView=false, mode=null, attempt=0, initializing=null;
+let offlineView=false, attempt=0, initializing=null, deviceCopy=false, copyCheck=0;
+installDoubleTapGuard(document, navigator);
 let storyItemId = null;
-function hasPlaceStory(item) {
-  if (item?.kind !== 'event') return false;
-  const location = item.title + ' ' + item.place;
-  return !/南院|南部院區/.test(location) && /故宮|梯航星集|南京條約/.test(location);
-}
+function hasPlaceStory(item) { return storiesFor(item).length > 0; }
 function closeStory() {
   storyItemId = null;
   if ($('#placeStory').open) $('#placeStory').close();
@@ -19,8 +19,10 @@ function openStory(button) {
   if (tab !== 'days' || !trip || $('#placeStory').open) return;
   const item = items.find(row => row.id === button.dataset.story && row.date === day);
   if (!hasPlaceStory(item)) return;
+  const entries = storiesFor(item);
   storyItemId = item.id;
-  $('#storySources').hidden = !navigator.onLine;
+  $('#placeStoryTitle').textContent = entries.length === 1 ? entries[0].title : item.title;
+  $('#storyContent').innerHTML = entries.map(story => `<section class="story-section">${entries.length > 1 ? `<h3>${e(story.title)}</h3>` : ''}<p><strong>點解推薦？</strong> ${e(story.why)}</p><p><strong>背後故事：</strong> ${e(story.history)}</p>${story.visit ? `<p><strong>點睇最順？</strong> ${e(story.visit)}</p>` : ''}${story.sources?.length ? `<div class="story-sources"${navigator.onLine && !offlineView ? '' : ' hidden'}>${story.sources.map(([label, url]) => `<a href="${e(url)}" target="_blank" rel="noopener noreferrer">${e(label)} ↗</a>`).join('')}</div>` : ''}</section>`).join('');
   $('#placeStory').scrollTop = 0;
   $('#placeStory').showModal();
   $('#placeStoryTitle').focus({preventScroll:true});
@@ -31,6 +33,7 @@ $('#placeStory').addEventListener('close', () => {
   storyItemId = null;
   if (id !== null) [...document.querySelectorAll('[data-story]')].find(button => button.dataset.story === id)?.focus({preventScroll:true});
 });
+const copySignalKey = 'taipei-travel:offline-changed';
 const rememberLoginKey = "taipei-remember-login";
 let rememberLogin = false;
 try { rememberLogin = localStorage.getItem(rememberLoginKey) === "1"; } catch {}
@@ -83,7 +86,7 @@ function accessFailure(error) {
     gate('私人旅程尚未準備好', 'Google 已登入，請稍後重新檢查旅程資料。', true);
     status('旅程資料待準備');
   } else {
-    if (['permission-denied','not-a-member'].includes(error?.code)) eraseCopy();
+    if (['permission-denied','not-a-member'].includes(error?.code)) void eraseCopy();
     gate('台北權限尚未設定', 'Google 已登入，但未取得這個旅程的存取權。請管理員完成帳戶授權後按「重新檢查權限」。', true);
     status('台北權限待設定');
   }
@@ -163,7 +166,7 @@ $('#account').onclick = async () => {
   if (!client) return status('登入服務仍在準備，請稍後再試。');
   accountBusy = true; updateAccount();
   try {
-    if (user) { eraseCopy(); clearTrip(); await client.logout(); signedOut(); status('已登出，私人資料已從畫面清除。'); }
+    if (user) { clearTrip(); const removed=await eraseCopy(); await client.logout(); signedOut(); status(removed?'已登出，私人資料已清除。':'已登出，但未能確認刪除離線副本；請喺此裝置再試刪除。'); }
     else { wantsPrivateAfterLogin = true; await client.login(); }
   } catch (error) {
     wantsPrivateAfterLogin = false;
@@ -214,92 +217,118 @@ $('#theme').onclick = () => {
   try { localStorage.setItem('taipei-theme', document.body.classList.contains('dark') ? 'dark' : 'light'); } catch {}
 };
 try { document.body.classList.toggle('dark', localStorage.getItem('taipei-theme') === 'dark'); } catch {}
-function copy() { try { return localStorage.getItem(storageKey); } catch { return null; } }
-function eraseCopy() { try { localStorage.removeItem(storageKey); return true; } catch { return false; } }
+function legacyCopy() { try { return Boolean(localStorage.getItem(storageKey)); } catch { return false; } }
+function eraseLegacy() { try { localStorage.removeItem(storageKey); return true; } catch { return false; } }
+const deviceSupported=()=>Boolean(globalThis.indexedDB && globalThis.crypto?.subtle);
+async function refreshCopy() {
+  const run=++copyCheck;
+  if (!deviceSupported()) { deviceCopy=false; return updateOffline(); }
+  try { const found=await hasDeviceCopy(); if (run===copyCheck) deviceCopy=found; }
+  catch { /* Keep the last known state so a storage error cannot hide Delete. */ }
+  if (run===copyCheck) updateOffline();
+}
+async function eraseCopy() {
+  ++copyCheck;
+  const removedLegacy=eraseLegacy();
+  try {
+    if (deviceSupported()) await deleteDeviceCopy();
+    deviceCopy=false; updateOffline(); signalCopy('delete'); return removedLegacy;
+  } catch { updateOffline(); return false; }
+}
+function signalCopy(action) {
+  try { localStorage.setItem(copySignalKey, action + ':' + Date.now()); } catch {}
+}
 function updateOffline() {
-  $('#offlineSave').hidden=!(navigator.onLine && user && trip && role && !demo && !offlineView && crypto.subtle);
-  $('#offlineSave').textContent=copy()?'更新離線版':'儲存離線版';
-  $('#offlineOpen').hidden=navigator.onLine || !copy() || !crypto.subtle;
+  const online=navigator.onLine;
+  $('#offlineSave').hidden=!(online && user && trip && role && !demo && !offlineView && deviceSupported());
+  $('#offlineSave').textContent=deviceCopy?'更新離線版':'儲存離線版';
+  $('#offlineOpen').hidden=online || !deviceCopy || !deviceSupported() || offlineView;
   $('#offlineLock').hidden=!offlineView;
-  $('#offlineDelete').hidden=!copy();
+  $('#offlineDelete').hidden=!deviceCopy && !legacyCopy();
+  if (!online && !demo && !offlineView) {
+    $('#gateMessage').textContent=deviceCopy?'可以直接開啟呢部機嘅離線行程。':legacyCopy()?'偵測到舊密碼版。請連網登入，再撳「儲存離線版」轉用新版。':'此裝置未有離線版。請連網登入後儲存。';
+  }
 }
 function closeOffline() {
-  mode=null; attempt++; $('#offlineForm').reset();
+  attempt++;
+  $('#offlineSubmit').disabled=false;
   if ($('#offlineDialog').open) $('#offlineDialog').close();
 }
 function offlineGate() {
-  clearTrip(); gate('已離線', copy()?'用離線密碼解鎖本機副本。':'此裝置未有離線版。請連網登入後儲存。');
-  status('已離線');
+  clearTrip(); gate('已離線', '正在檢查此裝置嘅離線版…');
+  status('已離線'); void refreshCopy();
 }
-function dialog(next) {
-  if ((next==='save' ? $('#offlineSave') : $('#offlineOpen')).hidden) return;
-  closeOffline(); mode=next;
-  const save=next==='save';
-  $('#offlineTitle').textContent=save?'儲存加密離線版':'解鎖離線行程';
-  $('#offlineHelp').textContent=save?'只喺自己嘅裝置使用。設定至少 10 字元嘅獨立密碼；行程、預訂同清單只會加密儲喺本機。副本只讀，14 日後失效；登出會清除。離線時無法驗證最新權限。':'輸入儲存時設定嘅離線密碼，唔係 Google 密碼。';
-  $('#offlineConfirmWrap').hidden=!save; $('#offlineConfirm').required=save;
-  $('#offlineSubmit').textContent=save?'加密並儲存':'解鎖';
-  $('#offlineSubmit').disabled=false; $('#offlineError').textContent='';
+$('#offlineSave').onclick=()=>{
+  if ($('#offlineSave').hidden || $('#offlineDialog').open) return;
+  closeOffline();
+  $('#offlineError').textContent='';
   $('#offlineDialog').showModal();
-}
-$('#offlineSave').onclick=()=>dialog('save');
-$('#offlineOpen').onclick=()=>dialog('unlock');
+};
 $('#offlineCancel').onclick=closeOffline;
 $('#offlineDialog').addEventListener('cancel',e=>{e.preventDefault();closeOffline();});
 $('#offlineLock').onclick=offlineGate;
-$('#offlineDelete').onclick=()=>{
+$('#offlineDelete').onclick=async()=>{
   if (!confirm('刪除此裝置嘅離線副本？網上行程唔會改動。')) return;
   closeOffline();
-  if (!eraseCopy()) return status('未能刪除本機副本。');
-  if (offlineView || (!navigator.onLine && !demo)) offlineGate(); else updateOffline();
+  if (offlineView) offlineGate();
+  if (!(await eraseCopy())) return status('未能刪除本機副本。請再試。');
   status('已刪除本機離線副本。');
 };
-addEventListener('storage',e=>{
-  if ((e.key===storageKey || e.key===null) && !copy()) {
-    if (offlineView) offlineGate(); else closeOffline();
-    updateOffline();
-  }
-});
 $('#offlineForm').onsubmit=async e=>{
   e.preventDefault();
-  const step=mode, seq=++attempt, gen=generation, uid=user?.uid;
-  const pass=$('#offlinePass').value, again=$('#offlineConfirm').value;
-  $('#offlinePass').value=''; $('#offlineConfirm').value='';
-  const current=()=>seq===attempt && gen===generation && step===mode;
+  if ($('#offlineSubmit').disabled || $('#offlineSave').hidden || !user || !role || !trip) return;
+  const seq=++attempt, gen=generation, uid=user.uid;
+  const current=()=>seq===attempt && gen===generation && user?.uid===uid && navigator.onLine && !!role && !!trip && !demo && !offlineView;
   $('#offlineSubmit').disabled=true; $('#offlineError').textContent='';
   try {
-    if (step==='save' && navigator.onLine && uid && role && trip && !demo && !offlineView) {
-      if (pass!==again) { $('#offlineError').textContent='兩次密碼唔相同，請再輸入。'; return; }
-      const urls=['./index.html','./styles.css?v=9','./app.js?v=9','./core.js?v=6','./offline.js?v=8'];
-      const ready=await Promise.all(urls.map(url=>caches.match(url,{cacheName:'taipei-shell-v9'})));
-      if (!ready.every(Boolean)||!navigator.serviceWorker.controller) throw Object.assign(Error('shell'),{code:'shell'});
-      const data=await client.readOfflineCopy(uid);
-      if (!current() || !navigator.onLine || user?.uid!==uid) return;
-      const blob=await encrypt(data,pass);
-      if (!current() || !navigator.onLine || user?.uid!==uid) return;
-      localStorage.setItem(storageKey,blob);
-      closeOffline(); updateOffline(); status('已儲存加密離線版。可以開飛行模式試用。');
-    } else if (step==='unlock' && !navigator.onLine) {
-      const blob=copy(), data=await decrypt(blob,pass);
-      if (!current() || navigator.onLine || blob!==copy()) return;
-      clearTrip(); offlineView=true; role='viewer'; trip=data.trip; items=data.items;
-      tab='days'; day=initialTripDay(trip.start,trip.end); render(); window.scrollTo(0,0);
-      status('離線副本 · 只讀 · 儲存於 '+new Date(data.at).toLocaleString('zh-HK',{timeZone:'Asia/Taipei'}));
-    }
+    const urls=['./index.html','./styles.css?v=10','./app.js?v=10','./core.js?v=6','./offline.js?v=8','./device-offline.js?v=10','./place-stories.js?v=10','./touch-guard.js?v=10'];
+    const ready=await Promise.all(urls.map(url=>caches.match(url,{cacheName:'taipei-shell-v10'})));
+    if (!ready.every(Boolean)||!navigator.serviceWorker.controller) throw Object.assign(Error('shell'),{code:'shell'});
+    if (!current()) return;
+    const data=await client.readOfflineCopy(uid);
+    if (!current()) return;
+    await saveDeviceCopy(data,current);
+    if (!current()) { void refreshCopy(); return; }
+    eraseLegacy(); ++copyCheck; deviceCopy=true; signalCopy('save');
+    closeOffline(); updateOffline(); status('已儲存離線版。冇網可以直接開啟。');
   } catch (err) {
     if (!current()) return;
     if (err?.code==='permission-denied') return accessFailure(err);
-    if (err?.code==='expired') { eraseCopy(); offlineGate(); return status('副本已過期，請連網重新儲存。'); }
-    $('#offlineError').textContent=step==='unlock'?'未能解鎖。請檢查離線密碼。':err?.code==='shell'?'離線 App 尚未下載完成，請連網重新整理再試。':'未能儲存離線版。請檢查連線或裝置空間。';
+    $('#offlineError').textContent=err?.code==='shell'?'新版 App 尚未下載完成，請連網重新整理再試。':'未能儲存離線版。請檢查連線及裝置空間。';
   } finally { if (current()) $('#offlineSubmit').disabled=false; }
 };
+$('#offlineOpen').onclick=async()=>{
+  if ($('#offlineOpen').hidden || $('#offlineOpen').disabled || navigator.onLine) return;
+  const seq=++attempt, gen=generation;
+  const current=()=>seq===attempt && gen===generation && !navigator.onLine;
+  $('#offlineOpen').disabled=true;
+  try {
+    const data=await readDeviceCopy();
+    if (!current()) return;
+    clearTrip(); offlineView=true; role='viewer'; trip=data.trip; items=data.items;
+    tab='days'; day=initialTripDay(trip.start,trip.end); render(); window.scrollTo(0,0);
+    status('離線副本 · 只讀 · 儲存於 '+new Date(data.at).toLocaleString('zh-HK',{timeZone:'Asia/Taipei'}));
+  } catch(err) {
+    if (!current()) return;
+    if (err?.code==='expired') { await eraseCopy(); if (current()) status('離線副本已過期，請連網重新儲存。'); }
+    else { void refreshCopy(); status('未能開啟離線版。請連網重新儲存。'); }
+  } finally { $('#offlineOpen').disabled=false; }
+};
+addEventListener('storage',e=>{
+  if (e.key===copySignalKey && e.newValue?.startsWith('delete:')) {
+    if (offlineView) offlineGate(); else { closeOffline(); void refreshCopy(); }
+  } else if (e.key===copySignalKey || e.key===storageKey || e.key===null) void refreshCopy();
+});
+document.addEventListener('visibilitychange',()=>{if (document.visibilityState==='visible') void refreshCopy();});
 addEventListener('pagehide',()=>{closeStory(); if (offlineView) offlineGate(); else closeOffline();});
 addEventListener('offline',()=>{
-  if (!demo) { reconnectPrivate=Boolean(user); offlineGate(); } else { $('#storySources').hidden=true; updateOffline(); }
+  if (!demo) { reconnectPrivate=Boolean(user); offlineGate(); }
+  else { document.querySelectorAll('.story-sources').forEach(node=>node.hidden=true); updateOffline(); }
 });
 addEventListener('online',()=>{
-  if (offlineView) clearTrip(); else { $('#storySources').hidden=false; closeOffline(); }
-  updateOffline();
+  if (offlineView) clearTrip(); else closeOffline();
+  document.querySelectorAll('.story-sources').forEach(node=>node.hidden=false);
+  void refreshCopy();
   $('#retryAccess').disabled=false;
   if (reconnectPrivate && client && user && !demo && !accountBusy) openPrivate(user);
   else if (!client) initOnline();
@@ -329,4 +358,4 @@ function initOnline() {
   return initializing;
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
-if (navigator.onLine) initOnline(); else offlineGate();
+if (navigator.onLine) { void refreshCopy(); initOnline(); } else offlineGate();

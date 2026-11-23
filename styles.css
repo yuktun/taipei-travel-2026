@@ -14,3 +14,7 @@ html,body,.days,dialog{touch-action:manipulation}
 #placeStory h3{margin:12px 0 4px;font-size:1rem}#placeStory p{line-height:1.7;margin:0 0 10px}#placeStory .eyebrow{margin:0}
 .story-sources:not([hidden]){display:flex;flex-wrap:wrap;gap:8px 14px;font-size:.875rem}.story-sources a{color:inherit}
 
+
+.story-section + .story-section{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}.story-section .story-sources{margin-top:5px}
+.event,.event a,button,#placeStory,#placeStory *{touch-action:manipulation}
+input:not([type=checkbox]),textarea,select{font-size:16px}
