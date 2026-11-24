@@ -1,6 +1,7 @@
 import {escapeHTML as e, mapURL, roleFor, validateItem, datesBetween, demoTrip, demoItems, initialTripDay} from './core.js?v=6';
 import {storageKey} from './offline.js?v=8';
 import {hasDeviceCopy, saveDeviceCopy, readDeviceCopy, deleteDeviceCopy} from './device-offline.js?v=10';
+import {dayGuide} from './slow-days.js?v=11';
 import {storiesFor} from './place-stories.js?v=10';
 import {installDoubleTapGuard} from './touch-guard.js?v=10';
 const $ = selector => document.querySelector(selector);
@@ -101,11 +102,28 @@ function render() {
   $('#exitPreview').hidden = !demo; $('#add').hidden = role !== 'admin' || demo;
   $('#add').textContent = tab === 'days' ? '＋ 加入行程' : tab === 'bookings' ? '＋ 加入預訂' : '＋ 加入清單';
   $('#daysPicker').hidden = tab !== 'days';
-  $('#daysPicker').innerHTML = datesBetween(trip.start, trip.end).map((date, i) => `<button data-day="${e(date)}" class="${date === day ? 'active' : ''}" aria-pressed="${date === day}">DAY ${i + 1}${demo ? '' : `<br>${e(date.slice(5).replace('-', ' / '))}`}</button>`).join('');
+  const dates = datesBetween(trip.start, trip.end);
+  const guide = role && !demo && tab === 'days' ? dayGuide(day, dates) : null;
+  $('#daysPicker').innerHTML = dates.map((date, i) => `<button data-day="${e(date)}" class="${date === day ? 'active' : ''}" aria-pressed="${date === day}">DAY ${i + 1}${demo ? '' : `<br>${e(date.slice(5).replace('-', ' / '))}`}</button>`).join('');
   const kind = tab === 'days' ? 'event' : tab === 'bookings' ? 'booking' : 'check';
   if (storyItemId !== null && (tab !== 'days' || !items.some(item => item.id === storyItemId && item.date === day && hasPlaceStory(item)))) closeStory();
   const list = items.filter(item => item.kind === kind && (tab !== 'days' || item.date === day)).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-  $('#content').innerHTML = list.length ? list.map(item => `<article class="event"><time>${e(tab === 'days' ? item.time : demo ? '' : item.date.slice(5))}</time><div><h3>${item.done ? '✓ ' : ''}${e(item.title)}</h3><p>${e(item.note)}</p>${item.place ? offlineView ? `<span class="fine">${e(item.place)}</span>` : `<a href="${e(mapURL(item.place))}" target="_blank" rel="noopener noreferrer">↗ ${e(item.place)}</a>` : ''}${hasPlaceStory(item) ? `<div class="story-action"><button type="button" data-story="${e(item.id)}" aria-haspopup="dialog">推薦理由・背後故事</button></div>` : ''}${role === 'admin' && !demo ? `<div class="actions">${item.kind === 'check' ? `<button data-toggle="${e(item.id)}">${item.done ? '標為未完成' : '完成'}</button>` : ''}<button data-edit="${e(item.id)}">編輯</button><button data-delete="${e(item.id)}">刪除</button></div>` : ''}</div></article>`).join('') : `<div class="empty">${demo && tab === 'bookings' ? '行程靈感唔代表已預訂。<br><small>私人預訂只會於授權登入後顯示。</small>' : '呢一頁仲有空間。<br><small>等下一個好點子。</small>'}</div>`;
+  const renderItem = item => `<article class="event"><time>${e(tab === 'days' ? item.time : demo ? '' : item.date.slice(5))}</time><div><h3>${item.done ? '✓ ' : ''}${e(item.title)}</h3><p>${e(item.note)}</p>${item.place ? offlineView ? `<span class="fine">${e(item.place)}</span>` : `<a href="${e(mapURL(item.place))}" target="_blank" rel="noopener noreferrer">↗ ${e(item.place)}</a>` : ''}${hasPlaceStory(item) ? `<div class="story-action"><button type="button" data-story="${e(item.id)}" aria-haspopup="dialog">推薦理由・背後故事</button></div>` : ''}${role === 'admin' && !demo ? `<div class="actions">${item.kind === 'check' ? `<button data-toggle="${e(item.id)}">${item.done ? '標為未完成' : '完成'}</button>` : ''}<button data-edit="${e(item.id)}">編輯</button><button data-delete="${e(item.id)}">刪除</button></div>` : ''}</div></article>`;
+  const empty = `<div class="empty">${demo && tab === 'bookings' ? '行程靈感唔代表已預訂。<br><small>私人預訂只會於授權登入後顯示。</small>' : '呢一頁仲有空間。<br><small>等下一個好點子。</small>'}</div>`;
+  if (guide) {
+    const [heading, steps] = guide;
+    const dinnerDay = dates.indexOf(day) === 2;
+    // Keep scheduled evening items in plain sight on the museum day.
+    const isEvening = item => /^(?:1[7-9]|2[0-3]):/.test(item.time.trim());
+    const fixed = dinnerDay ? list.filter(isEvening) : [];
+    const reference = dinnerDay ? list.filter(item => !isEvening(item)) : list;
+    const referenceOpen = $('#content .day-reference[data-date="'+day+'"]')?.open ?? false;
+    $('#content').innerHTML = `<section class="slow-day" aria-labelledby="slowDayTitle"><p class="eyebrow">慢遊版 · 每日重點</p><h3 id="slowDayTitle">${e(heading)}</h3><dl>${steps.map(([label, note]) => `<div><dt>${e(label)}</dt><dd>${e(note)}</dd></div>`).join('')}</dl></section>` +
+      (fixed.length ? `<section aria-label="原有晚間行程">${fixed.map(renderItem).join('')}</section>` : '') +
+      (reference.length ? `<details class="day-reference" data-date="${e(day)}"${referenceOpen ? ' open' : ''}><summary>查看原有行程、地圖同故事</summary>${reference.map(renderItem).join('')}</details>` : '');
+  } else {
+    $('#content').innerHTML = list.length ? list.map(renderItem).join('') : empty;
+  }
   document.querySelectorAll('[data-tab]').forEach(button => button.setAttribute('aria-selected', button.dataset.tab === tab));
   updateAccount();
 }
@@ -281,8 +299,8 @@ $('#offlineForm').onsubmit=async e=>{
   const current=()=>seq===attempt && gen===generation && user?.uid===uid && navigator.onLine && !!role && !!trip && !demo && !offlineView;
   $('#offlineSubmit').disabled=true; $('#offlineError').textContent='';
   try {
-    const urls=['./index.html','./styles.css?v=10','./app.js?v=10','./core.js?v=6','./offline.js?v=8','./device-offline.js?v=10','./place-stories.js?v=10','./touch-guard.js?v=10'];
-    const ready=await Promise.all(urls.map(url=>caches.match(url,{cacheName:'taipei-shell-v10'})));
+    const urls=['./index.html','./styles.css?v=11','./app.js?v=11','./slow-days.js?v=11','./core.js?v=6','./offline.js?v=8','./device-offline.js?v=10','./place-stories.js?v=10','./touch-guard.js?v=10'];
+    const ready=await Promise.all(urls.map(url=>caches.match(url,{cacheName:'taipei-shell-v11'})));
     if (!ready.every(Boolean)||!navigator.serviceWorker.controller) throw Object.assign(Error('shell'),{code:'shell'});
     if (!current()) return;
     const data=await client.readOfflineCopy(uid);

@@ -18,3 +18,10 @@ html,body,.days,dialog{touch-action:manipulation}
 .story-section + .story-section{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}.story-section .story-sources{margin-top:5px}
 .event,.event a,button,#placeStory,#placeStory *{touch-action:manipulation}
 input:not([type=checkbox]),textarea,select{font-size:16px}
+
+/* Primary guide, followed by the optional original itinerary. */
+.slow-day{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:clamp(16px,4vw,24px);margin:0 0 14px;color:var(--ink)}
+.slow-day h3{margin:6px 0 14px;font-size:clamp(1.15rem,4.8vw,1.45rem)}.slow-day dl{margin:0}
+.slow-day dl div{padding:10px 0;border-top:1px solid var(--line)}.slow-day dt{font-size:.875rem;font-weight:700}
+.slow-day dd{margin:4px 0 0;line-height:1.65;font-size:.9375rem;color:var(--muted)}
+.day-reference{margin:14px 0}.day-reference summary{cursor:pointer;min-height:44px;padding:10px 4px;font-size:.9375rem}
